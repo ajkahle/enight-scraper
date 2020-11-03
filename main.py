@@ -8,7 +8,7 @@ from df2gspread import df2gspread as d2g
 import os
 
 
-def scrape():
+def scrape(event,context):
     start = _datetime.now()
 
     google_project_id    = os.environ['google_project_id']
