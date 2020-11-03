@@ -9,6 +9,7 @@ import os
 import urllib
 
 
+
 def scrape(event,context):
     start = _datetime.now()
 
@@ -22,7 +23,7 @@ def scrape(event,context):
         "type": "service_account",
         "private_key_id":google_key_id,
         "project_id": google_project_id,
-        "private_key": google_cred_password,
+        "private_key": google_cred_password.replace('\\n', '\n'),
         "client_email": google_cred_username,
         "client_id":google_client_id,
         "auth_uri": "https://accounts.google.com/o/oauth2/auth",
@@ -134,6 +135,7 @@ def scrape(event,context):
 
     print(_datetime.now() - start)
 
+scrape('','')
 
 if __name__ == "__main__":
-    scrape()
+    scrape('','')
