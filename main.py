@@ -8,8 +8,6 @@ from df2gspread import df2gspread as d2g
 import os
 import urllib
 
-
-
 def scrape(event,context):
     start = _datetime.now()
 
@@ -134,8 +132,6 @@ def scrape(event,context):
     d2g.upload(final_data, '10_bhKbRqrywCer0flwXO9UPxdCspOnvfD8ESP9ZV45M', 'raw_data', credentials=credentials, row_names=False,clean=True)
 
     print(_datetime.now() - start)
-
-scrape('','')
 
 if __name__ == "__main__":
     scrape('','')
