@@ -3,3 +3,4 @@ BeautifulSoup4
 gspread
 oauth2client
 df2gspread
+lxml
