@@ -129,8 +129,6 @@ def scrape(event,context):
 
     final_data = pd.DataFrame(data)
 
-    print(final_data.columns)
-
     index_races = final_data[(final_data['office']=='house') & (final_data['id'].isnull())].index
     final_data.drop(index_races,inplace=True)
 
@@ -148,14 +146,12 @@ def test(event,context):
     base_url = 'https://www.politico.com/2020-election/results/'
 
     _url = base_url+url['state']+'/'+url['race']
-    print(_url)
     page = requests.get(_url)
     soup = BeautifulSoup(page.text,features='lxml')
 
     containers = soup.select('div.smaller-leaderboard-container,div.leaderboard-holder-child.primary-column')
 
     for c in containers:
-        print(c)
         id = c.find_next('div').get('id')
         rows = c.find('table',class_='candidate-table').find('tbody').find_all('tr')
 
@@ -176,4 +172,4 @@ def test(event,context):
 
 
 if __name__ == "__main__":
-    test('','')
+    scrape('','')
