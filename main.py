@@ -126,6 +126,9 @@ def scrape(event,context):
             pass
 
     final_data = pd.DataFrame(data)
+
+    print(final_data.columns)
+
     index_races = final_data[(final_data['office']=='house') & (final_data['id'].isnull())].index
     final_data.drop(index_races,inplace=True)
 
