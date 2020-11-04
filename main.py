@@ -101,8 +101,6 @@ def scrape(event,context):
             page = requests.get(_url)
             soup = BeautifulSoup(page.text,features='lxml')
 
-            print(_url)
-
             containers = soup.select('div.smaller-leaderboard-container,div.leaderboard-holder-child.primary-column')
 
             for c in containers:
