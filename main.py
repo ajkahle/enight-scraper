@@ -143,7 +143,7 @@ def test(event,context):
 
     url={
     'state':'texas',
-    'race':'senate'
+    'race':'house'
     }
     base_url = 'https://www.politico.com/2020-election/results/'
 
