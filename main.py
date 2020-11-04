@@ -101,6 +101,8 @@ def scrape(event,context):
             page = requests.get(_url)
             soup = BeautifulSoup(page.text,features='lxml')
 
+            print(_url)
+
             containers = soup.select('div.smaller-leaderboard-container,div.leaderboard-holder-child.primary-column')
 
             for c in containers:
@@ -119,6 +121,8 @@ def scrape(event,context):
                         'precincts':c.find('div','vote-progress').get_text(),
                         'called':c.find('div',class_='candidate-winner-check').get_text()
                     }
+
+                    print(_data)
 
                     data.append(_data)
 
