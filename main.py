@@ -115,9 +115,10 @@ def scrape(event,context):
                         'candidate':r.find('div',class_='candidate-short-name').get_text(),
                         'party':r.find('div',class_='party-label').get_text(),
                         'votes':r.find('div',class_='candidate-votes-next-to-percent').get_text(),
-                        'percent':r.find('div',class_='candidate-percent-only').get_text(),
-                        'precincts':c.find('div','vote-progress').get_text(),
-                        'called':c.find('div',class_='candidate-winner-check').get_text()
+                        'percent':r.find('div',class_='candidate-percent-only').get_text()
+#                         ,
+#                         'precincts':c.find('div','vote-progress').get_text(),
+#                         'called':c.find('div',class_='candidate-winner-check').get_text()
                     }
 
                     print(_data)
