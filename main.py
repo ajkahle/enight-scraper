@@ -7,15 +7,20 @@ from oauth2client.service_account import ServiceAccountCredentials
 from df2gspread import df2gspread as d2g
 import os
 import urllib
+import re
+import json
+import sys
+from pathlib import Path
+from dotenv import load_dotenv
 
-def scrape(event,context):
-    start = _datetime.now()
+load_dotenv()
 
-    google_project_id    = os.environ['google_project_id']
-    google_cred_password = os.environ['google_cred_password']
-    google_cred_username = os.environ['google_cred_username']
-    google_client_id     = os.environ['google_client_id']
-    google_key_id        = os.environ['google_key_id']
+def data_to_sheets(data,ws,sheet):
+    google_project_id    = os.environ['GOOGLE_PROJECT_ID']
+    google_cred_password = os.environ['GOOGLE_CRED_PASSWORD']
+    google_cred_username = os.environ['GOOGLE_CRED_USERNAME']
+    google_client_id     = os.environ['GOOGLE_CLIENT_ID']
+    google_key_id        = os.environ['GOOGLE_KEY_ID']
 
     _cred = {
         "type": "service_account",
@@ -36,140 +41,203 @@ def scrape(event,context):
     credentials = ServiceAccountCredentials.from_json_keyfile_dict(_cred, scope)
     gc = gspread.authorize(credentials)
 
-    states = ['alabama',
-            'alaska',
-            'arizona',
-            'arkansas',
-            'california',
-            'colorado',
-            'connecticut',
-            'delaware',
-            'florida',
-            'georgia',
-            'hawaii',
-            'idaho',
-            'illinois',
-            'indiana',
-            'iowa',
-            'kansas',
-            'kentucky',
-            'louisiana',
-            'maine',
-            'maryland',
-            'massachusetts',
-            'michigan',
-            'minnesota',
-            'mississippi',
-            'missouri',
-            'montana',
-            'nebraska',
-            'nevada',
-            'new-hampshire',
-            'new-jersey',
-            'new-mexico',
-            'new-york',
-            'north-carolina',
-            'north-dakota',
-            'ohio',
-            'oklahoma',
-            'oregon',
-            'pennsylvania',
-            'rhode-island',
-            'south-carolina',
-            'south-dakota',
-            'tennessee',
-            'texas',
-            'utah',
-            'vermont',
-            'virginia',
-            'washington',
-            'washington-dc',
-            'west-virginia',
-            'wisconsin',
-            'wyoming'
-]
+    print(data)
 
-    races = ['house','senate','governor']
+    d2g.upload(data, ws, sheet, credentials=credentials, row_names=False,clean=True)
 
-    base_url = 'https://www.politico.com/2020-election/results/'
+
+def get_data_from_container(state,updated_at,race_type,race_subtype,c):
+    data = []
+    race_name = None
+    reporting = None
+
+    updated_at = re.search(r'\| .+',updated_at).group(0)
+    updated_at = updated_at.replace('| ','')
+
+    if (len(c.select('.result-table-header'))>0) : race_name = c.select('.result-table-header')[0].get_text()
+    if (len(c.select('.result-table-subheader'))>0) : reporting = c.select('.result-table-subheader')[0].get_text()
+
+    for row in c.select('table.result-table>tbody>tr'):
+        raw_candidate = None
+        name = None
+        party = None
+        incumbent = None
+        winner = None
+        votes = None
+        percent= None
+
+        for i,td in enumerate(row.select("td")):
+            _text = td.get_text()
+            if i == 0:
+                raw_candidate = _text
+                name = re.sub(r' \(.+\).*','',_text)
+                name = name.replace('\n',' ')
+
+                if party := re.search(r'\(.+\)',_text):
+                    party = party.group(0)
+                    party = re.sub(r'[\(\)]','',party)
+
+                if incumbent := re.search(r'\*',_text):
+                    incumbent = incumbent.group(0)
+                winner = 'winner' in td['class']
+            elif i == 1:
+                votes = _text
+            elif i == 2:
+                percent = _text
+
+        _data = {
+            "state":state,
+            "updated_at":updated_at,
+            "race_type":race_type,
+            "race_subtype":race_subtype,
+            "race_name":race_name,
+            "reporting":reporting,
+            "raw_candidate":raw_candidate,
+            "candidate":name,
+            "party":party,
+            "votes":votes,
+            "percent":percent,
+            "incumbent":incumbent,
+            "winner":winner
+        }
+
+        data.append(_data)
+
+    return data
+
+
+def get_county_level_data(event,context):
+
+    print(f"***STARTING COUNTY SCRAPE FOR {context['state']}***")
+
+    start = _datetime.now()
+
+    urls = [{'type':'Other Election Results','link':f"https://www.jsonline.com/elections/results/2022-11-08/state/{context['state']}"},
+            {'type':'U.S. House','link':f"https://www.jsonline.com/elections/results/2022-11-08/us-house/{context['state']}"},
+            {'type':'Illinois State Senate','link':f"https://www.jsonline.com/elections/results/2022-11-08/state/{context['state']}/upper"},
+            {'type':'Illinois State House','link':f"https://www.jsonline.com/elections/results/2022-11-08/state/{context['state']}/lower"}
+            ]
 
     data = []
 
-    for url in [({'state':x,'race':y}) for x in states for y in races]:
-        _url = base_url+url['state']+'/'+url['race']
-        try:
+    county_links = []
+    for _url in urls:
+        page = requests.get(_url['link'])
+        soup = BeautifulSoup(page.text,features="lxml")
+
+        for l in soup.select('.result-table-linkout-link'):
+            if l.get_text() == '''County-by-County\nResults''':
+                county_links.append({'type':_url['type'],'link':l['href']})
+
+    race_start_time = _datetime.now()
+
+    for l in county_links:
+        race_start_time = _datetime.now()
+
+        page = requests.get(l['link'])
+        soup = BeautifulSoup(page.text,features="lxml")
+
+        race = soup.select('.result-table-header')[0].get_text()
+        updated_at = soup.select(".elections-header-subtitle")[0].get_text()
+
+        for f in soup.select('.results-fips-container'):
+            for c in f.select('.result-table-block'):
+                data.append(get_data_from_container(context['state'],updated_at,l['type'],race,c))
+
+        print(f"{race} ended in {_datetime.now() - race_start_time}")
+
+
+    data = [item for sublist in data for item in sublist]
+
+    df = pd.DataFrame(data)
+
+    if 'filter' in context.keys():
+        ind = [True] * len(df)
+
+        for col, vals in context['filter'].items():
+            ind = ind & (df[col].isin(vals))
+
+        df = df[ind]
+
+    data_to_sheets(df,context['ws'],context['sheet'])
+
+    print(f"FINISHED IN {_datetime.now() - start}")
+
+
+
+def get_data(start,states):
+    races = ['us-house','upper','lower']
+    data = []
+    base_url = 'https://www.jsonline.com/elections/results/2022-11-08/'
+
+    state_start_time = _datetime.now()
+
+    for state in states:
+        state_start_time = _datetime.now()
+
+        _url = base_url+"state/"+state
+
+        page = requests.get(_url)
+        soup = BeautifulSoup(page.text,features="lxml")
+        updated_at = soup.select(".elections-header-subtitle")[0].get_text()
+
+        for c in soup.select('.oxygen-package-body>.result-table-block'):
+            data.append(get_data_from_container(state,updated_at,None,None,c))
+
+        for f in soup.select('.results-fips-container'):
+            if len(f.select(".result-table-linkout")) > 1:
+
+                for c in f.select('.result-table-block'):
+                    data.append(get_data_from_container(state,updated_at,f.select('.results-fips-title')[0].get_text(),None,c))
+
+        for race in races:
+            if race == 'us-house':
+                _url = base_url+race+"/"+state
+            else:
+                _url = base_url+'state/'+state+'/'+race
+
             page = requests.get(_url)
-            soup = BeautifulSoup(page.text,features='lxml')
+            soup = BeautifulSoup(page.text,features="lxml")
 
-            containers = soup.select('div.smaller-leaderboard-container,div.leaderboard-holder-child.primary-column')
+            updated_at = soup.select(".elections-header-subtitle")[0].get_text()
 
-            for c in containers:
-                id = c.find_next('div').get('id')
-                rows = c.find('table',class_='candidate-table').find('tbody').find_all('tr')
+            for f in soup.select('.results-fips-container'):
+                for c in f.select('.result-table-block'):
+                    data.append(get_data_from_container(state,updated_at,f.select('.results-fips-title')[0].get_text(),None,c))
 
-                for r in rows:
-                    _data = {
-                        'state':url['state'],
-                        'office':url['race'],
-                        'id':id,
-                        'candidate':r.find('div',class_='candidate-short-name').get_text(),
-                        'party':r.find('div',class_='party-label').get_text(),
-                        'votes':r.find('div',class_='candidate-votes-next-to-percent').get_text(),
-                        'percent':r.find('div',class_='candidate-percent-only').get_text(),
-                        'precincts':c.find('div','vote-progress').get_text(),
-                        'called':c.find('div',class_='candidate-winner-check').get_text()
-                    }
-
-                    print(_data)
-
-                    data.append(_data)
-
-        except:
-            pass
-
-    final_data = pd.DataFrame(data)
-
-    index_races = final_data[(final_data['office']=='house') & (final_data['id'].isnull())].index
-    final_data.drop(index_races,inplace=True)
-
-    d2g.upload(final_data, '10_bhKbRqrywCer0flwXO9UPxdCspOnvfD8ESP9ZV45M', 'raw_data', credentials=credentials, row_names=False,clean=True)
-
-    print(_datetime.now() - start)
+        print(f"{state} ended in {_datetime.now() - state_start_time}")
 
 
-def test(event,context):
+    data = [item for sublist in data for item in sublist]
 
-    url={
-    'state':'texas',
-    'race':'house'
-    }
-    base_url = 'https://www.politico.com/2020-election/results/'
+    df = pd.DataFrame(data)
 
-    _url = base_url+url['state']+'/'+url['race']
-    page = requests.get(_url)
-    soup = BeautifulSoup(page.text,features='lxml')
+    return df
 
-    containers = soup.select('div.smaller-leaderboard-container,div.leaderboard-holder-child.primary-column')
+def scrape(event,context):
+    start = _datetime.now()
 
-    for c in containers:
-        id = c.find_next('div').get('id')
-        rows = c.find('table',class_='candidate-table').find('tbody').find_all('tr')
+    print("***STARTING SCRAPE***")
 
-        for r in rows:
-            _data = {
-                'state':url['state'],
-                'office':url['race'],
-                'id':id,
-                'candidate':r.find('div',class_='candidate-short-name').get_text(),
-                'party':r.find('div',class_='party-label').get_text(),
-                'votes':r.find('div',class_='candidate-votes-next-to-percent').get_text(),
-                'percent':r.find('div',class_='candidate-percent-only').get_text(),
-                'precincts':c.find('div','vote-progress').get_text(),
-                'called':c.find('div',class_='candidate-winner-check').get_text()
-            }
+    __location__ = os.path.realpath(
+        os.path.join(os.getcwd(), os.path.dirname(__file__)))
 
-            print(_data)
+    f = open(os.path.join(__location__, context['states']))
+
+    states = json.load(f)
+    states = states['states']
+
+    data = get_data(start,states)
+    data_to_sheets(data,context['ws'],context['sheet'])
+
+    print(f"FINISHED IN {_datetime.now() - start}")
 
 
-if __name__ == "__main__":
-    scrape('','')
+
+# if __name__ == "__main__":
+    # get_county_level_data('',{'state':'illinois','ws':'1w644pHazhJg0YC1Io5YuAhWjnKgI8cevrmRE67CvCiE','sheet':'county_data'})
+    # get_county_level_data('',{'state':'illinois','ws':'1vk9ZXXX8_u07crucrXosilsKV-NXAqhClVM0CWnrSEk','sheet':'raw_data','filter':{'race_type':['U.S. House'],'race_subtype':['District 14']}})
+    # scrape('',{'states':'all_states.json','ws':'1My5BqqbIzysbXysOlZ2pcf0SoUHYBK7BGFqfTVen88A','sheet':'national_raw_data'})
+    # scrape('',{'states':'states.json','ws':'1My5BqqbIzysbXysOlZ2pcf0SoUHYBK7BGFqfTVen88A','sheet':'arena_raw_data'})
+    # args = sys.argv
+    # globals()[args[1]](*args[2:])
