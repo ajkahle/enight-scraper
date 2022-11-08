@@ -108,14 +108,14 @@ def get_data_from_container(state,updated_at,race_type,race_subtype,c):
 
 def get_county_level_data(event,context):
 
-    print(f"***STARTING COUNTY SCRAPE FOR {context['state']}***")
+    print(f"***STARTING COUNTY SCRAPE FOR {event['state']}***")
 
     start = _datetime.now()
 
-    urls = [{'type':'Other Election Results','link':f"https://www.jsonline.com/elections/results/2022-11-08/state/{context['state']}"},
-            {'type':'U.S. House','link':f"https://www.jsonline.com/elections/results/2022-11-08/us-house/{context['state']}"},
-            {'type':'Illinois State Senate','link':f"https://www.jsonline.com/elections/results/2022-11-08/state/{context['state']}/upper"},
-            {'type':'Illinois State House','link':f"https://www.jsonline.com/elections/results/2022-11-08/state/{context['state']}/lower"}
+    urls = [{'type':'Other Election Results','link':f"https://www.jsonline.com/elections/results/2022-11-08/state/{event['state']}"},
+            {'type':'U.S. House','link':f"https://www.jsonline.com/elections/results/2022-11-08/us-house/{event['state']}"},
+            {'type':'Illinois State Senate','link':f"https://www.jsonline.com/elections/results/2022-11-08/state/{event['state']}/upper"},
+            {'type':'Illinois State House','link':f"https://www.jsonline.com/elections/results/2022-11-08/state/{event['state']}/lower"}
             ]
 
     data = []
@@ -142,7 +142,7 @@ def get_county_level_data(event,context):
 
         for f in soup.select('.results-fips-container'):
             for c in f.select('.result-table-block'):
-                data.append(get_data_from_container(context['state'],updated_at,l['type'],race,c))
+                data.append(get_data_from_container(event['state'],updated_at,l['type'],race,c))
 
         print(f"{race} ended in {_datetime.now() - race_start_time}")
 
@@ -151,15 +151,15 @@ def get_county_level_data(event,context):
 
     df = pd.DataFrame(data)
 
-    if 'filter' in context.keys():
+    if 'filter' in event.keys():
         ind = [True] * len(df)
 
-        for col, vals in context['filter'].items():
+        for col, vals in event['filter'].items():
             ind = ind & (df[col].isin(vals))
 
         df = df[ind]
 
-    data_to_sheets(df,context['ws'],context['sheet'])
+    data_to_sheets(df,event['ws'],event['sheet'])
 
     print(f"FINISHED IN {_datetime.now() - start}")
 
@@ -222,13 +222,13 @@ def scrape(event,context):
     __location__ = os.path.realpath(
         os.path.join(os.getcwd(), os.path.dirname(__file__)))
 
-    f = open(os.path.join(__location__, context['states']))
+    f = open(os.path.join(__location__, event['states']))
 
     states = json.load(f)
     states = states['states']
 
     data = get_data(start,states)
-    data_to_sheets(data,context['ws'],context['sheet'])
+    data_to_sheets(data,event['ws'],event['sheet'])
 
     print(f"FINISHED IN {_datetime.now() - start}")
 
