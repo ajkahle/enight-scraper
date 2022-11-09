@@ -1,6 +1,7 @@
 pandas
 BeautifulSoup4
 gspread
+gspread_dataframe
 oauth2client
 df2gspread
 lxml
