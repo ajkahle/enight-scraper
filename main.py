@@ -12,6 +12,8 @@ import json
 import sys
 from pathlib import Path
 from dotenv import load_dotenv
+import base64
+
 
 load_dotenv()
 
@@ -107,11 +109,13 @@ def get_data_from_container(state,updated_at,race_type,race_subtype,c):
 
 
 def get_county_level_data(event,context):
-    print(event)
-
-    event = json.loads(event)
-
     print(f"***STARTING COUNTY SCRAPE FOR {event['state']}***")
+    
+    print(event['data'])
+
+    print(base64.b64decode(event['data']).decode('utf-8'))
+
+    event = json.loads(base64.b64decode(event['data']).decode('utf-8'))
 
     start = _datetime.now()
 
