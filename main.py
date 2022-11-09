@@ -107,6 +107,9 @@ def get_data_from_container(state,updated_at,race_type,race_subtype,c):
 
 
 def get_county_level_data(event,context):
+    print(event)
+
+    event = json.loads(event)
 
     print(f"***STARTING COUNTY SCRAPE FOR {event['state']}***")
 
