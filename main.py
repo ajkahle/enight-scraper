@@ -5,6 +5,7 @@ from datetime import datetime as _datetime
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 from df2gspread import df2gspread as d2g
+from gspread_dataframe import set_with_dataframe
 import os
 import urllib
 import re
@@ -45,7 +46,12 @@ def data_to_sheets(data,ws,sheet):
 
     print(data)
 
-    d2g.upload(data, ws, sheet, credentials=credentials, row_names=False,clean=True)
+    # d2g.upload(data, ws, sheet, credentials=credentials, row_names=False,clean=True)
+
+    spreadsheet = gc.open_by_key(ws)
+    worksheet   = spreadsheet.worksheet(sheet)
+
+    set_with_dataframe(worksheet,data)
 
 
 def get_data_from_container(state,updated_at,race_type,race_subtype,c):
@@ -84,6 +90,8 @@ def get_data_from_container(state,updated_at,race_type,race_subtype,c):
                 winner = 'winner' in td['class']
             elif i == 1:
                 votes = _text
+                if votes == '-' or votes == 'Unopposed':
+                    votes = '0'
             elif i == 2:
                 percent = _text
 
@@ -97,7 +105,7 @@ def get_data_from_container(state,updated_at,race_type,race_subtype,c):
             "raw_candidate":raw_candidate,
             "candidate":name,
             "party":party,
-            "votes":votes,
+            "votes":int(votes.replace(',', '')),
             "percent":percent,
             "incumbent":incumbent,
             "winner":winner
@@ -109,13 +117,11 @@ def get_data_from_container(state,updated_at,race_type,race_subtype,c):
 
 
 def get_county_level_data(event,context):
-    print("-----TEST-----")
+    # print("-----TEST-----")
 
-    print(event)
+    # print(event['data'])
 
-    print(event['data'])
-
-    print(base64.b64decode(event['data']).decode('utf-8'))
+    # print(base64.b64decode(event['data']).decode('utf-8'))
 
     event = json.loads(base64.b64decode(event['data']).decode('utf-8'))
 
@@ -155,7 +161,7 @@ def get_county_level_data(event,context):
             for c in f.select('.result-table-block'):
                 data.append(get_data_from_container(event['state'],updated_at,l['type'],race,c))
 
-        print(f"{race} ended in {_datetime.now() - race_start_time}")
+        # print(f"{race} ended in {_datetime.now() - race_start_time}")
 
 
     data = [item for sublist in data for item in sublist]
@@ -230,6 +236,8 @@ def scrape(event,context):
 
     print("***STARTING SCRAPE***")
 
+    event = json.loads(base64.b64decode(event['data']).decode('utf-8'))
+
     __location__ = os.path.realpath(
         os.path.join(os.getcwd(), os.path.dirname(__file__)))
 
@@ -247,8 +255,8 @@ def scrape(event,context):
 
 # if __name__ == "__main__":
     # get_county_level_data('',{'state':'illinois','ws':'1w644pHazhJg0YC1Io5YuAhWjnKgI8cevrmRE67CvCiE','sheet':'county_data'})
-    # get_county_level_data('',{'state':'illinois','ws':'1vk9ZXXX8_u07crucrXosilsKV-NXAqhClVM0CWnrSEk','sheet':'raw_data','filter':{'race_type':['U.S. House'],'race_subtype':['District 14']}})
+    # get_county_level_data({'state':'illinois','ws':'1vk9ZXXX8_u07crucrXosilsKV-NXAqhClVM0CWnrSEk','sheet':'raw_data','filter':{'race_type':['U.S. House'],'race_subtype':['District 14']}},'')
     # scrape('',{'states':'all_states.json','ws':'1My5BqqbIzysbXysOlZ2pcf0SoUHYBK7BGFqfTVen88A','sheet':'national_raw_data'})
-    # scrape('',{'states':'states.json','ws':'1My5BqqbIzysbXysOlZ2pcf0SoUHYBK7BGFqfTVen88A','sheet':'arena_raw_data'})
+    # scrape({'states':'arena_states.json','ws':'1My5BqqbIzysbXysOlZ2pcf0SoUHYBK7BGFqfTVen88A','sheet':'arena_raw_data'},'')
     # args = sys.argv
     # globals()[args[1]](*args[2:])
