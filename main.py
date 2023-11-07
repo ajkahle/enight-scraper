@@ -57,6 +57,48 @@ def data_to_sheets(data,ws,sheet):
 
     set_with_dataframe(worksheet,data)
 
+def explode_va(data):
+
+    data['voteTotals'] = data['ballotOptions']['groupResults']
+
+    return data
+
+def get_va_data():
+    link = 'https://enr.elections.virginia.gov/results/public/api/elections/Virginia/2023-Nov-Gen/files/json'
+
+    _json = requests.get(link).text
+
+    _data = json.loads(_json)['results']['ballotItems']
+    
+    data = pd.DataFrame(_data)
+
+    data = data.explode('ballotOptions')
+
+    data = data.apply(explode_va,axis=1)
+
+    data = data.explode('voteTotals')
+
+    data.rename({'id':'raceId','name':'fullRaceName'})
+    data['raceId'] = data['id']
+    data['raceType'] = data['name'].apply(lambda x: (re.search(r', .+ \(',x).group(0))[2:][:-2] if re.search(r', .+ \(',x) else np.nan)
+    data['districtNumber'] = data['name'].apply(lambda x: re.search(r'\d+',x).group(0) if re.search(r'\d+',x) else np.nan)
+    data['candidateId'] = data['ballotOptions'].apply(lambda x: x['id'])
+    data['candidateName'] = data['ballotOptions'].apply(lambda x: x['name'])
+    data['candidateBallotOrder'] = data['ballotOptions'].apply(lambda x: x['ballotOrder'])
+    data['politicalParty'] = data['ballotOptions'].apply(lambda x: x['politicalParty'])
+    # data['totalVoteCount'] = data['ballotOptions'].apply(lambda x: x['totalVoteCount'])
+
+    data['voteType'] = data['voteTotals'].apply(lambda x: x['groupName'])
+    data['voteCount'] = data['voteTotals'].apply(lambda x: x['voteCount'])
+    data['isFromVirtualPrecinct'] = data['voteTotals'].apply(lambda x: x['isFromVirtualPrecinct'])
+    
+
+    data.drop(columns=['ballotOrder','ballotOptions','rankedChoiceResults','voteTotals'],inplace=True)
+
+
+    data_to_sheets(data,'1GVrMS9gpoGQScWtRPz_ZNiWp0DL2rskraR7O4OkDXeU','data')
+
+
 
 def get_data_from_container(state,updated_at,race_type,race_subtype,c):
     data = []
@@ -123,7 +165,7 @@ def get_data_from_container(state,updated_at,race_type,race_subtype,c):
 def get_county_level_data(event,context):
     print("-----TEST-----")
 
-    event = json.loads(base64.b64decode(event['data']).decode('utf-8'))
+    # event = json.loads(base64.b64decode(event['data']).decode('utf-8'))
 
     print(f"***STARTING COUNTY SCRAPE FOR {event['state']}***")
 
@@ -236,7 +278,7 @@ def scrape(event,context):
 
     print("***STARTING SCRAPE***")
 
-    event = json.loads(base64.b64decode(event['data']).decode('utf-8'))
+    # event = json.loads(base64.b64decode(event['data']).decode('utf-8'))
 
     __location__ = os.path.realpath(
         os.path.join(os.getcwd(), os.path.dirname(__file__)))
@@ -252,11 +294,11 @@ def scrape(event,context):
     print(f"FINISHED IN {_datetime.now() - start}")
 
 
-
-# if __name__ == "__main__":
-    # get_county_level_data('',{'state':'illinois','ws':'1w644pHazhJg0YC1Io5YuAhWjnKgI8cevrmRE67CvCiE','sheet':'county_data'})
+if __name__ == "__main__":
+    # get_county_level_data({'state':'illinois','ws':'1w644pHazhJg0YC1Io5YuAhWjnKgI8cevrmRE67CvCiE','sheet':'county_data'},'')
     # get_county_level_data({'state':'illinois','ws':'1vk9ZXXX8_u07crucrXosilsKV-NXAqhClVM0CWnrSEk','sheet':'raw_data','filter':{'race_type':['U.S. House'],'race_subtype':['District 14']}},'')
-    # scrape('',{'states':'all_states.json','ws':'1My5BqqbIzysbXysOlZ2pcf0SoUHYBK7BGFqfTVen88A','sheet':'national_raw_data'})
+    # scrape({'states':'all_states.json','ws':'1My5BqqbIzysbXysOlZ2pcf0SoUHYBK7BGFqfTVen88A','sheet':'national_raw_data'},'')
+    get_va_data()
     # scrape({'states':'arena_states.json','ws':'1My5BqqbIzysbXysOlZ2pcf0SoUHYBK7BGFqfTVen88A','sheet':'arena_raw_data'},'')
     # args = sys.argv
     # globals()[args[1]](*args[2:])
