@@ -11,6 +11,7 @@ import urllib
 import re
 import json
 import sys
+import numpy as np
 from pathlib import Path
 from dotenv import load_dotenv
 import base64
