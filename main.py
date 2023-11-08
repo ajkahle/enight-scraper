@@ -64,7 +64,7 @@ def explode_va(data):
 
     return data
 
-def get_va_data():
+def get_va_data(event,context):
     link = 'https://enr.elections.virginia.gov/results/public/api/elections/Virginia/2023-Nov-Gen/files/json'
 
     _json = requests.get(link).text
